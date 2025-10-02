@@ -39,6 +39,11 @@ func TestProcessCallExpr(t *testing.T) {
 			source:   `fmt.Sprintf("%s, hello!", "Max")`,
 			expected: `"Max" + ", hello!"`,
 		},
+		{
+			name:     "number literal",
+			source:   `fmt.Sprintf("High %d!", 5)`,
+			expected: `"High " + strconv.Itoa(5) + "!"`,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -63,19 +68,6 @@ func TestProcessCallExpr(t *testing.T) {
 		})
 	}
 }
-
-// func TestSplitConcatedString(t *testing.T) {
-// 	t.Parallel()
-
-// 	scs := SplitConcatedString{
-// 		parts: []part{val: `"Hello, "`, `"!"`},
-// 	}
-
-// 	expected := `"Hello, " + "Max" + "!"`
-// 	got := scs.Fill([]string{`"Max"`})
-
-// 	require.Equal(t, expected, got)
-// }
 
 func TestSplitConcat(t *testing.T) {
 	t.Parallel()
@@ -102,6 +94,15 @@ func TestSplitConcat(t *testing.T) {
 				{val: ", hello!"},
 			},
 		},
+		{
+			name:   "High %d!",
+			source: "High %d!",
+			expected: []part{
+				{val: "High "},
+				{val: "%d", isVerb: true},
+				{val: "!"},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -115,14 +116,6 @@ func TestSplitConcat(t *testing.T) {
 	}
 
 }
-
-// func TestConcatedStringFill(t *testing.T) {
-// 	t.Parallel()
-
-// 	s := SplitConcatedString{}
-
-// 	// gots.Fill()
-// }
 
 func formatNode(fset *token.FileSet, node ast.Node) string {
 

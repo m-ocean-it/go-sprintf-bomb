@@ -2,9 +2,11 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"slices"
 	"strconv"
 )
 
@@ -20,39 +22,43 @@ func main() {
 func ProcessExpr(expr ast.Expr) (ast.Expr, error) {
 	switch e := expr.(type) {
 	case *ast.CallExpr:
-		exprNew := processCallExpr(e)
-		return exprNew, nil
+		return processCallExpr(e)
 	default:
 		return nil, errors.New("not implemented")
 	}
 }
 
-func processCallExpr(callExpr *ast.CallExpr) ast.Expr {
+func processCallExpr(callExpr *ast.CallExpr) (ast.Expr, error) {
 	selExpr, _ := callExpr.Fun.(*ast.SelectorExpr)
 	if selExpr == nil {
-		return callExpr
+		return callExpr, nil
 	}
 
 	xIdent, _ := selExpr.X.(*ast.Ident)
 	if xIdent == nil {
-		return callExpr
+		return callExpr, nil
 	}
 	if xIdent.Name != "fmt" {
-		return callExpr
+		return callExpr, nil
 	}
 
 	if selExpr.Sel.Name != "Sprintf" {
-		return callExpr
+		return callExpr, nil
 	}
 
 	if len(callExpr.Args) < 2 {
 		panic("todo")
 	}
 
-	return optimizeSprintf(callExpr)
+	result, err := optimizeSprintf(callExpr)
+	if err != nil {
+		return nil, fmt.Errorf("optimize Sprintf call: %w", err)
+	}
+
+	return result, nil
 }
 
-func optimizeSprintf(callExpr *ast.CallExpr) ast.Expr {
+func optimizeSprintf(callExpr *ast.CallExpr) (ast.Expr, error) {
 	s := callExpr.Args[0].(*ast.BasicLit)
 
 	if s.Kind != token.STRING {
@@ -62,12 +68,17 @@ func optimizeSprintf(callExpr *ast.CallExpr) ast.Expr {
 
 	sVal, err := strconv.Unquote(s.Value)
 	if err != nil {
-		return callExpr
+		return nil, fmt.Errorf("unquote: %w", err)
 	}
 
 	splitConcatedStr := SplitConcat(sVal)
 
-	return splitConcatedStr.Fill(callExpr.Args[1:])
+	result, err := splitConcatedStr.Fill(callExpr.Args[1:])
+	if err != nil {
+		return nil, fmt.Errorf("fill: %w", err)
+	}
+
+	return result, nil
 }
 
 type SplitConcatedString struct {
@@ -79,7 +90,7 @@ type part struct {
 	isVerb bool
 }
 
-func (s *SplitConcatedString) Fill(args []ast.Expr) ast.Expr {
+func (s *SplitConcatedString) Fill(args []ast.Expr) (ast.Expr, error) {
 	res := &ast.BinaryExpr{
 		Op: token.ADD,
 	}
@@ -88,7 +99,39 @@ func (s *SplitConcatedString) Fill(args []ast.Expr) ast.Expr {
 	for _, p := range s.parts {
 		var e ast.Expr
 		if p.isVerb {
-			e = args[nextArg]
+			switch p.val {
+			case "%s":
+				e = args[nextArg]
+			case "%d":
+				a := args[nextArg]
+				aLit, _ := a.(*ast.BasicLit)
+				if aLit == nil {
+					return nil, errors.New("aLit == nil") // TODO
+				}
+				if aLit.Kind != token.INT {
+					return nil, errors.New("aLit.Kind != token.INT") // TODO
+				}
+
+				e = &ast.CallExpr{
+					Fun: &ast.SelectorExpr{
+						X: &ast.Ident{
+							Name: "strconv",
+						},
+						Sel: &ast.Ident{
+							Name: "Itoa",
+						},
+					},
+					Args: []ast.Expr{
+						&ast.BasicLit{
+							Kind:  token.INT,
+							Value: aLit.Value,
+						},
+					},
+				}
+			default:
+				panic("todo")
+			}
+
 			nextArg++
 		} else {
 			e = &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(p.val)}
@@ -103,46 +146,34 @@ func (s *SplitConcatedString) Fill(args []ast.Expr) ast.Expr {
 		}
 	}
 
-	return res
+	return res, nil
 }
 
-func SplitConcat(source string) *SplitConcatedString {
-	// FIXME: won't work for many cases
-	// TODO: account for escaping
+var supportedVerbs = []string{"%s", "%d"} // TODO support more
 
-	// sep := "%s" // TODO: support more verbs
+func SplitConcat(source string) *SplitConcatedString {
+	// TODO: account for numbered placeholders (%[1]s, etc.)
+	// TODO: account for escaping
 
 	var parts []part
 
-	sourceRunes := []rune(source)
+	var v []rune
 
-	var percent bool
-	var nextRuneIdx int
-
-	for i, r := range sourceRunes {
-		if r == 's' && percent {
-			prev := string(sourceRunes[nextRuneIdx : i-1])
-			if prev != "" {
-				parts = append(parts, part{
-					val: prev,
-				})
-			}
-			parts = append(parts, part{
-				val:    "%s",
-				isVerb: true,
-			})
-			nextRuneIdx = i + 1
-		}
+	for _, r := range source {
 		if r == '%' {
-			percent = true
-		} else {
-			percent = false
+			if len(v) > 0 {
+				parts = append(parts, part{val: string(v)})
+			}
+			v = v[:0]
+		} else if slices.Contains(supportedVerbs, string(v)) {
+			parts = append(parts, part{val: string(v), isVerb: true})
+			v = v[:0]
 		}
+
+		v = append(v, r)
 	}
-	if nextRuneIdx < len(sourceRunes) {
-		parts = append(parts, part{
-			val: string(sourceRunes[nextRuneIdx:]),
-		})
+	if len(v) > 0 {
+		parts = append(parts, part{val: string(v)})
 	}
 
 	return &SplitConcatedString{
