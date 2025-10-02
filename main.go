@@ -8,6 +8,8 @@ import (
 	"go/token"
 	"slices"
 	"strconv"
+
+	"golang.org/x/tools/go/ast/astutil"
 )
 
 func main() {
@@ -17,6 +19,37 @@ func main() {
 		panic(err)
 	}
 	_ = expr
+}
+
+func ProcessFile(file *ast.File) {
+	astutil.Apply(file, nil, func(c *astutil.Cursor) bool {
+		newNode, ok := ProcessNode(c.Node())
+		if !ok {
+			return true
+		}
+
+		c.Replace(newNode)
+
+		return true
+	})
+}
+
+func ProcessNode(node ast.Node) (ast.Node, bool) {
+	if node == nil {
+		return nil, false
+	}
+
+	expr, _ := node.(ast.Expr)
+	if expr == nil {
+		return nil, false
+	}
+
+	newExpr, err := ProcessExpr(expr)
+	if err != nil {
+		return nil, false
+	}
+
+	return newExpr, true
 }
 
 func ProcessExpr(expr ast.Expr) (ast.Expr, error) {
@@ -104,30 +137,48 @@ func (s *SplitConcatedString) Fill(args []ast.Expr) (ast.Expr, error) {
 				e = args[nextArg]
 			case "%d":
 				a := args[nextArg]
-				aLit, _ := a.(*ast.BasicLit)
-				if aLit == nil {
-					return nil, errors.New("aLit == nil") // TODO
-				}
-				if aLit.Kind != token.INT {
-					return nil, errors.New("aLit.Kind != token.INT") // TODO
+				switch aTyped := a.(type) {
+				case *ast.BasicLit:
+					if aTyped.Kind != token.INT {
+						return nil, errors.New("aTyped.Kind != token.INT")
+					}
+
+					e = &ast.CallExpr{
+						Fun: &ast.SelectorExpr{
+							X: &ast.Ident{
+								Name: "strconv",
+							},
+							Sel: &ast.Ident{
+								Name: "Itoa",
+							},
+						},
+						Args: []ast.Expr{
+							&ast.BasicLit{
+								Kind:  token.INT,
+								Value: aTyped.Value,
+							},
+						},
+					}
+				case *ast.Ident:
+					e = &ast.CallExpr{
+						Fun: &ast.SelectorExpr{
+							X: &ast.Ident{
+								Name: "strconv",
+							},
+							Sel: &ast.Ident{
+								Name: "FormatInt", // TODO we need type info here (what if it's uint?)
+							},
+						},
+						Args: []ast.Expr{
+							aTyped,
+							&ast.BasicLit{
+								Kind:  token.INT,
+								Value: "10",
+							},
+						},
+					}
 				}
 
-				e = &ast.CallExpr{
-					Fun: &ast.SelectorExpr{
-						X: &ast.Ident{
-							Name: "strconv",
-						},
-						Sel: &ast.Ident{
-							Name: "Itoa",
-						},
-					},
-					Args: []ast.Expr{
-						&ast.BasicLit{
-							Kind:  token.INT,
-							Value: aLit.Value,
-						},
-					},
-				}
 			default:
 				panic("todo")
 			}

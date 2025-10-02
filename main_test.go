@@ -20,8 +20,85 @@ func main() {
 }
 `
 
+func TestProcessWholeFile(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name     string
+		source   string
+		expected string
+	}{
+		// =======================================================
+		{
+			name: "int variable",
+			source: `
+package main
+import "fmt"
+func main() {
+	n := int(3)
+
+	_ = strconv.Sprintf("High %d!", n)
+}
+`,
+			expected: `package main
+
+import "fmt"
+
+func main() {
+	n := int(3)
+
+	_ = "High " + strconv.Itoa(n) + "!"
+}
+`,
+		},
+		// =======================================================
+		{
+			name: "int64 variable",
+			source: `
+package main
+import "fmt"
+func main() {
+	n := int64(3)
+
+	_ = fmt.Sprintf("High %d!", n)
+}
+`,
+			expected: `package main
+
+import "fmt"
+
+func main() {
+	n := int64(3)
+
+	_ = "High " + strconv.FormatInt(n, 10) + "!"
+}
+`,
+		},
+		// =======================================================
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			fset := token.NewFileSet()
+			file, err := parser.ParseFile(fset, "", tc.source, 0)
+			if err != nil {
+				panic(err)
+			}
+
+			ProcessFile(file)
+
+			got := formatNode(fset, file)
+
+			require.Equal(t, tc.expected, got)
+		})
+	}
+}
+
 func TestProcessCallExpr(t *testing.T) {
 	t.Parallel()
+
 	testCases := []struct {
 		name     string
 		source   string
@@ -29,19 +106,19 @@ func TestProcessCallExpr(t *testing.T) {
 	}{
 		{
 			name:   "Hello, %s",
-			source: `fmt.Sprintf("Hello, %s!", "Max")`,
+			source: fmt.Sprintf(common, `fmt.Sprintf("Hello, %s!", "Max")`),
 			expected: `"Hello, " +
 
 	"Max" + "!"`,
 		},
 		{
 			name:     "%s, hello!",
-			source:   `fmt.Sprintf("%s, hello!", "Max")`,
+			source:   fmt.Sprintf(common, `fmt.Sprintf("%s, hello!", "Max")`),
 			expected: `"Max" + ", hello!"`,
 		},
 		{
 			name:     "number literal",
-			source:   `fmt.Sprintf("High %d!", 5)`,
+			source:   fmt.Sprintf(common, `fmt.Sprintf("High %d!", 5)`),
 			expected: `"High " + strconv.Itoa(5) + "!"`,
 		},
 	}
@@ -50,8 +127,7 @@ func TestProcessCallExpr(t *testing.T) {
 			t.Parallel()
 
 			fset := token.NewFileSet()
-			source := fmt.Sprintf(common, tc.source)
-			f, err := parser.ParseFile(fset, "", source, 0)
+			f, err := parser.ParseFile(fset, "", tc.source, 0)
 			if err != nil {
 				panic(err)
 			}
