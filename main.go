@@ -25,8 +25,6 @@ func ProcessExpr(expr ast.Expr) (ast.Expr, error) {
 	default:
 		return nil, errors.New("not implemented")
 	}
-
-	return expr, nil
 }
 
 func processCallExpr(callExpr *ast.CallExpr) ast.Expr {
@@ -123,9 +121,12 @@ func SplitConcat(source string) *SplitConcatedString {
 
 	for i, r := range sourceRunes {
 		if r == 's' && percent {
-			parts = append(parts, part{
-				val: string(sourceRunes[nextRuneIdx : i-1]),
-			})
+			prev := string(sourceRunes[nextRuneIdx : i-1])
+			if prev != "" {
+				parts = append(parts, part{
+					val: prev,
+				})
+			}
 			parts = append(parts, part{
 				val:    "%s",
 				isVerb: true,

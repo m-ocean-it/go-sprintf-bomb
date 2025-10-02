@@ -28,11 +28,16 @@ func TestProcessCallExpr(t *testing.T) {
 		expected string
 	}{
 		{
-			name:   "foo",
+			name:   "Hello, %s",
 			source: `fmt.Sprintf("Hello, %s!", "Max")`,
 			expected: `"Hello, " +
 
 	"Max" + "!"`,
+		},
+		{
+			name:     "%s, hello!",
+			source:   `fmt.Sprintf("%s, hello!", "Max")`,
+			expected: `"Max" + ", hello!"`,
 		},
 	}
 	for _, tc := range testCases {
@@ -75,17 +80,40 @@ func TestProcessCallExpr(t *testing.T) {
 func TestSplitConcat(t *testing.T) {
 	t.Parallel()
 
-	got := SplitConcat("Hello, %s!")
-
-	require.Equal(
-		t,
-		[]part{
-			{val: "Hello, "},
-			{val: "%s", isVerb: true},
-			{val: "!"},
+	testCases := []struct {
+		name     string
+		source   string
+		expected []part
+	}{
+		{
+			name:   "Hello, %s",
+			source: "Hello, %s!",
+			expected: []part{
+				{val: "Hello, "},
+				{val: "%s", isVerb: true},
+				{val: "!"},
+			},
 		},
-		got.parts,
-	)
+		{
+			name:   "%s, hello!",
+			source: "%s, hello!",
+			expected: []part{
+				{val: "%s", isVerb: true},
+				{val: ", hello!"},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := SplitConcat(tc.source)
+
+			require.Equal(t, tc.expected, got.parts)
+		})
+	}
+
 }
 
 // func TestConcatedStringFill(t *testing.T) {
