@@ -243,7 +243,7 @@ func splitConcat(source string) *splitConcatedString {
 				parts = append(parts, part{val: string(v)})
 			}
 			v = v[:0]
-		} else if slices.Contains(supportedVerbs, string(v)) {
+		} else if isVerb(v) {
 			parts = append(parts, part{val: string(v), isVerb: true})
 			v = v[:0]
 		}
@@ -251,12 +251,19 @@ func splitConcat(source string) *splitConcatedString {
 		v = append(v, r)
 	}
 	if len(v) > 0 {
-		parts = append(parts, part{val: string(v)})
+		parts = append(parts, part{
+			val:    string(v),
+			isVerb: isVerb(v),
+		})
 	}
 
 	return &splitConcatedString{
 		parts: parts,
 	}
+}
+
+func isVerb(rs []rune) bool {
+	return slices.Contains(supportedVerbs, string(rs))
 }
 
 func formatNode(fset *token.FileSet, node ast.Node) string {
