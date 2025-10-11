@@ -1,0 +1,13 @@
+package p
+
+import "fmt"
+
+func foo() {
+	i64 := int64(2)
+	_ = "High " + strconv.FormatInt(i64, 10) + "!" // want "foobar"
+
+	i := 2
+	_ = strconv.Itoa(i) + " is int"
+
+	_ = "a" + ", " + "b" + ", " + "c" // want "foobar"
+}
