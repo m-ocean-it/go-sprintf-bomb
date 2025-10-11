@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/format"
 	"go/token"
+	"go/types"
 	"slices"
 	"strconv"
 
@@ -31,7 +32,7 @@ func run(pass *analysis.Pass) (any, error) {
 	}
 
 	insp.Preorder(nodeFilter, func(node ast.Node) {
-		diagnostic := processNode(pass.Fset, node)
+		diagnostic := processNode(pass.Fset, pass.TypesInfo, node)
 		if diagnostic == nil {
 			return
 		}
@@ -56,7 +57,7 @@ func newAnalysisDiagnostic(
 	}
 }
 
-func processNode(fset *token.FileSet, node ast.Node) *analysis.Diagnostic {
+func processNode(fset *token.FileSet, typesInfo *types.Info, node ast.Node) *analysis.Diagnostic {
 	if node == nil {
 		return nil
 	}
@@ -66,19 +67,19 @@ func processNode(fset *token.FileSet, node ast.Node) *analysis.Diagnostic {
 		return nil
 	}
 
-	return processExpr(fset, expr)
+	return processExpr(fset, typesInfo, expr)
 }
 
-func processExpr(fset *token.FileSet, expr ast.Expr) *analysis.Diagnostic {
+func processExpr(fset *token.FileSet, typesInfo *types.Info, expr ast.Expr) *analysis.Diagnostic {
 	switch e := expr.(type) {
 	case *ast.CallExpr:
-		return processCallExpr(fset, e)
+		return processCallExpr(fset, typesInfo, e)
 	default:
 		return nil
 	}
 }
 
-func processCallExpr(fset *token.FileSet, callExpr *ast.CallExpr) *analysis.Diagnostic {
+func processCallExpr(fset *token.FileSet, typesInfo *types.Info, callExpr *ast.CallExpr) *analysis.Diagnostic {
 	selExpr, _ := callExpr.Fun.(*ast.SelectorExpr)
 	if selExpr == nil {
 		return nil
@@ -100,10 +101,10 @@ func processCallExpr(fset *token.FileSet, callExpr *ast.CallExpr) *analysis.Diag
 		panic("todo")
 	}
 
-	return optimizeSprintf(fset, callExpr)
+	return optimizeSprintf(fset, typesInfo, callExpr)
 }
 
-func optimizeSprintf(fset *token.FileSet, callExpr *ast.CallExpr) *analysis.Diagnostic {
+func optimizeSprintf(fset *token.FileSet, typesInfo *types.Info, callExpr *ast.CallExpr) *analysis.Diagnostic {
 	s := callExpr.Args[0].(*ast.BasicLit)
 
 	if s.Kind != token.STRING {
@@ -118,7 +119,7 @@ func optimizeSprintf(fset *token.FileSet, callExpr *ast.CallExpr) *analysis.Diag
 
 	splitConcatedStr := splitConcat(sVal)
 
-	result, err := splitConcatedStr.fill(callExpr.Args[1:])
+	result, err := splitConcatedStr.fill(callExpr.Args[1:], typesInfo)
 	if err != nil {
 		return nil
 	}
@@ -150,7 +151,7 @@ type part struct {
 	isVerb bool
 }
 
-func (s *splitConcatedString) fill(args []ast.Expr) (ast.Expr, error) {
+func (s *splitConcatedString) fill(args []ast.Expr, typesInfo *types.Info) (ast.Expr, error) {
 	res := &ast.BinaryExpr{
 		Op: token.ADD,
 	}
@@ -187,23 +188,46 @@ func (s *splitConcatedString) fill(args []ast.Expr) (ast.Expr, error) {
 						},
 					}
 				case *ast.Ident:
-					e = &ast.CallExpr{
-						Fun: &ast.SelectorExpr{
-							X: &ast.Ident{
-								Name: "strconv",
-							},
-							Sel: &ast.Ident{
-								Name: "FormatInt", // TODO we need type info here (what if it's uint?)
-							},
-						},
-						Args: []ast.Expr{
-							aTyped,
-							&ast.BasicLit{
-								Kind:  token.INT,
-								Value: "10",
-							},
-						},
+					tInfo, ok := typesInfo.Types[aTyped]
+					if !ok {
+						return nil, errors.New("no type info")
 					}
+
+					switch tInfo.Type.String() {
+					case "int64":
+						e = &ast.CallExpr{
+							Fun: &ast.SelectorExpr{
+								X: &ast.Ident{
+									Name: "strconv",
+								},
+								Sel: &ast.Ident{
+									Name: "FormatInt",
+								},
+							},
+							Args: []ast.Expr{
+								aTyped,
+								&ast.BasicLit{
+									Kind:  token.INT,
+									Value: "10",
+								},
+							},
+						}
+					case "int":
+						e = &ast.CallExpr{
+							Fun: &ast.SelectorExpr{
+								X: &ast.Ident{
+									Name: "strconv",
+								},
+								Sel: &ast.Ident{
+									Name: "Itoa",
+								},
+							},
+							Args: []ast.Expr{aTyped},
+						}
+					default:
+						panic("todo")
+					}
+
 				}
 
 			default:

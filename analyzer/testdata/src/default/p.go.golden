@@ -7,7 +7,9 @@ func foo() {
 	_ = "High " + strconv.FormatInt(i64, 10) + "!" // want "foobar"
 
 	i := 2
-	_ = strconv.Itoa(i) + " is int"
+	_ = strconv.Itoa(i) + " is int" // want "foobar"
 
 	_ = "a" + ", " + "b" + ", " + "c" // want "foobar"
+
+	_ = "John" + " is " + strconv.Itoa(3) + " years old" // want "foobar"
 }
