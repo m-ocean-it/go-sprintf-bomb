@@ -4,15 +4,15 @@ import "fmt"
 
 func foo() {
 	i64 := int64(2)
-	_ = "High " + strconv.FormatInt(i64, 10) + "!" // want "foobar"
+	_ = "High " + strconv.FormatInt(i64, 10) + "!" // want "Sprintf could be optimized away"
 
 	i := 2
-	_ = strconv.Itoa(i) + " is int" // want "foobar"
+	_ = strconv.Itoa(i) + " is int" // want "Sprintf could be optimized away"
 
-	_ = "a" + ", " + "b" + ", " + "c" // want "foobar"
+	_ = "a" + ", " + "b" + ", " + "c" // want "Sprintf could be optimized away"
 
-	_ = "John" + " is " + strconv.Itoa(3) + " years old. Pi is " + strconv.FormatFloat(3.14, 'f', -1, 64) // want "foobar"
+	_ = "John" + " is " + strconv.Itoa(3) + " years old. Pi is " + strconv.FormatFloat(3.14, 'f', -1, 64) // want "Sprintf could be optimized away"
 
 	f32 := float32(3.14)
-	_ = "Pi is " + strconv.FormatFloat(float64(f32), 'f', -1, 64) // want "foobar"
+	_ = "Pi is " + strconv.FormatFloat(float64(f32), 'f', -1, 64) // want "Sprintf could be optimized away"
 }

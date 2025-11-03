@@ -15,9 +15,9 @@ import (
 
 func New() *analysis.Analyzer {
 	return &analysis.Analyzer{
-		Name:     "foobar",
-		URL:      "foobar",
-		Doc:      "foobar",
+		Name:     "sprintf-bomb",
+		URL:      "https://github.com/m-ocean-it/go-sprintf-bomb",
+		Doc:      "https://github.com/m-ocean-it/go-sprintf-bomb",
 		Run:      run,
 		Requires: []*analysis.Analyzer{inspect.Analyzer},
 	}
@@ -96,7 +96,8 @@ func processCallExpr(fset *token.FileSet, typesInfo *types.Info, callExpr *ast.C
 	}
 
 	if len(callExpr.Args) < 2 {
-		panic("todo")
+		// TODO: handle case
+		return nil
 	}
 
 	return optimizeSprintf(fset, typesInfo, callExpr)
@@ -110,10 +111,10 @@ func optimizeSprintf(fset *token.FileSet, typesInfo *types.Info, callExpr *ast.C
 
 	return newAnalysisDiagnostic(
 		callExpr,
-		"foobar",
+		"Sprintf could be optimized away",
 		[]analysis.SuggestedFix{
 			{
-				Message: "foobar",
+				Message: "Sprintf could be optimized away",
 				TextEdits: []analysis.TextEdit{
 					{
 						Pos:     callExpr.Pos(),
