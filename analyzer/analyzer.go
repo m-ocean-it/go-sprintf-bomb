@@ -2,13 +2,11 @@ package analyzer
 
 import (
 	"bytes"
-	"errors"
 	"go/ast"
 	"go/format"
 	"go/token"
 	"go/types"
 	"slices"
-	"strconv"
 
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/inspect"
@@ -105,22 +103,8 @@ func processCallExpr(fset *token.FileSet, typesInfo *types.Info, callExpr *ast.C
 }
 
 func optimizeSprintf(fset *token.FileSet, typesInfo *types.Info, callExpr *ast.CallExpr) *analysis.Diagnostic {
-	s := callExpr.Args[0].(*ast.BasicLit)
-
-	if s.Kind != token.STRING {
-		panic("todo")
-		// TODO support any expression of type string
-	}
-
-	sVal, err := strconv.Unquote(s.Value)
-	if err != nil {
-		return nil
-	}
-
-	splitConcatedStr := splitConcat(sVal)
-
-	result, err := splitConcatedStr.fill(callExpr.Args[1:], typesInfo)
-	if err != nil {
+	newExpr, ok := ProcessSprintfCall(typesInfo, callExpr)
+	if !ok {
 		return nil
 	}
 
@@ -134,7 +118,7 @@ func optimizeSprintf(fset *token.FileSet, typesInfo *types.Info, callExpr *ast.C
 					{
 						Pos:     callExpr.Pos(),
 						End:     callExpr.End(),
-						NewText: []byte(formatNode(fset, result)),
+						NewText: []byte(formatNode(fset, newExpr)),
 					},
 				},
 			},
@@ -142,152 +126,10 @@ func optimizeSprintf(fset *token.FileSet, typesInfo *types.Info, callExpr *ast.C
 	)
 }
 
-type splitConcatedString struct {
-	parts []part
-}
-
-type part struct {
-	val    string
-	isVerb bool
-}
-
-func (s *splitConcatedString) fill(args []ast.Expr, typesInfo *types.Info) (ast.Expr, error) {
-	res := &ast.BinaryExpr{
-		Op: token.ADD,
-	}
-
-	var nextArg int
-	for _, p := range s.parts {
-		var e ast.Expr
-		if p.isVerb {
-			switch p.val {
-			case "%s":
-				e = args[nextArg]
-			case "%d":
-				a := args[nextArg]
-				switch aTyped := a.(type) {
-				case *ast.BasicLit:
-					if aTyped.Kind != token.INT {
-						return nil, errors.New("aTyped.Kind != token.INT")
-					}
-
-					e = &ast.CallExpr{
-						Fun: &ast.SelectorExpr{
-							X: &ast.Ident{
-								Name: "strconv",
-							},
-							Sel: &ast.Ident{
-								Name: "Itoa",
-							},
-						},
-						Args: []ast.Expr{
-							&ast.BasicLit{
-								Kind:  token.INT,
-								Value: aTyped.Value,
-							},
-						},
-					}
-				case *ast.Ident:
-					tInfo, ok := typesInfo.Types[aTyped]
-					if !ok {
-						return nil, errors.New("no type info")
-					}
-
-					switch tInfo.Type.String() {
-					case "int64":
-						e = &ast.CallExpr{
-							Fun: &ast.SelectorExpr{
-								X: &ast.Ident{
-									Name: "strconv",
-								},
-								Sel: &ast.Ident{
-									Name: "FormatInt",
-								},
-							},
-							Args: []ast.Expr{
-								aTyped,
-								&ast.BasicLit{
-									Kind:  token.INT,
-									Value: "10",
-								},
-							},
-						}
-					case "int":
-						e = &ast.CallExpr{
-							Fun: &ast.SelectorExpr{
-								X: &ast.Ident{
-									Name: "strconv",
-								},
-								Sel: &ast.Ident{
-									Name: "Itoa",
-								},
-							},
-							Args: []ast.Expr{aTyped},
-						}
-					default:
-						panic("todo")
-					}
-
-				}
-
-			default:
-				panic("todo")
-			}
-
-			nextArg++
-		} else {
-			e = &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(p.val)}
-		}
-
-		if res.X == nil {
-			res.X = e
-		} else if res.Y == nil {
-			res.Y = e
-		} else {
-			res = &ast.BinaryExpr{X: res, Y: e, Op: token.ADD}
-		}
-	}
-
-	return res, nil
-}
-
 var supportedVerbs = []string{"%s", "%d"} // TODO support more
 
-func splitConcat(source string) *splitConcatedString {
-	// TODO: account for numbered placeholders (%[1]s, etc.)
-	// TODO: account for escaping
-
-	var parts []part
-
-	var v []rune
-
-	for _, r := range source {
-		if r == '%' {
-			if len(v) > 0 {
-				parts = append(parts, part{val: string(v)})
-			}
-			v = v[:0]
-		} else if isVerb(v) {
-			parts = append(parts, part{val: string(v), isVerb: true})
-			v = v[:0]
-		}
-
-		v = append(v, r)
-	}
-	if len(v) > 0 {
-		parts = append(parts, part{
-			val:    string(v),
-			isVerb: isVerb(v),
-		})
-	}
-
-	return &splitConcatedString{
-		parts: parts,
-	}
-}
-
-func isVerb(rs []rune) bool {
-	return slices.Contains(supportedVerbs, string(rs))
+func isVerb(rs string) bool {
+	return slices.Contains(supportedVerbs, rs)
 }
 
 func formatNode(fset *token.FileSet, node ast.Node) string {
