@@ -15,7 +15,7 @@ import (
 
 func New() *analysis.Analyzer {
 	return &analysis.Analyzer{
-		Name:     "sprintf-bomb",
+		Name:     "SprintfBomb",
 		URL:      "https://github.com/m-ocean-it/go-sprintf-bomb",
 		Doc:      "https://github.com/m-ocean-it/go-sprintf-bomb",
 		Run:      run,
