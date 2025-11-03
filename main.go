@@ -3,7 +3,7 @@ package main
 import (
 	"golang.org/x/tools/go/analysis/singlechecker"
 
-	"app/analyzer"
+	"github.com/m-ocean-it/go-sprintf-bomb/analyzer"
 )
 
 func main() {

@@ -1,4 +1,4 @@
-module app
+module github.com/m-ocean-it/go-sprintf-bomb
 
 go 1.25.1
 
