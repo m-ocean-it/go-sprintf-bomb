@@ -1,14 +1,8 @@
-package analyzer
+package transform
 
-type StrConvFunc int
+import "github.com/m-ocean-it/go-sprintf-bomb/analyzer/internal/strconvs"
 
-const (
-	StrConvFunc_Itoa StrConvFunc = iota + 1
-	StrConvFunc_FormatInt
-	StrConvFunc_FormatUint
-)
-
-type transformation interface {
+type Transformation interface {
 	isTransformation()
 }
 
@@ -27,7 +21,7 @@ type ConvertToType struct {
 func (c ConvertToType) isTransformation() {}
 
 type StrConv struct {
-	F StrConvFunc
+	Op strconvs.Op
 }
 
 func (s StrConv) isTransformation() {}

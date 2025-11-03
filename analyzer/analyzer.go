@@ -126,7 +126,7 @@ func optimizeSprintf(fset *token.FileSet, typesInfo *types.Info, callExpr *ast.C
 	)
 }
 
-var supportedVerbs = []string{"%s", "%d"} // TODO support more
+var supportedVerbs = []string{"%s", "%d", "%f"} // TODO support more
 
 func isVerb(rs string) bool {
 	return slices.Contains(supportedVerbs, rs)

@@ -11,5 +11,8 @@ func foo() {
 
 	_ = "a" + ", " + "b" + ", " + "c" // want "foobar"
 
-	_ = "John" + " is " + strconv.Itoa(3) + " years old" // want "foobar"
+	_ = "John" + " is " + strconv.Itoa(3) + " years old. Pi is " + strconv.FormatFloat(3.14, 'f', -1, 64) // want "foobar"
+
+	f32 := float32(3.14)
+	_ = "Pi is " + strconv.FormatFloat(float64(f32), 'f', -1, 64) // want "foobar"
 }

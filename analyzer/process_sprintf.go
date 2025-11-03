@@ -6,6 +6,9 @@ import (
 	"go/types"
 	"strconv"
 	"unicode/utf8"
+
+	"github.com/m-ocean-it/go-sprintf-bomb/analyzer/internal/strconvs"
+	"github.com/m-ocean-it/go-sprintf-bomb/analyzer/internal/transform"
 )
 
 func ProcessSprintfCall(typesInfo *types.Info, call *ast.CallExpr) (ast.Expr, bool) {
@@ -30,7 +33,7 @@ type analyzedSprintfCall struct {
 type sprintfArg struct {
 	position       [2]int
 	value          ast.Expr
-	transformation transformation
+	transformation transform.Transformation
 }
 
 func analyzeSprintfCall(typesInfo *types.Info, call *ast.CallExpr) (analyzedSprintfCall, bool) {
@@ -85,8 +88,8 @@ func analyzeSprintfCall(typesInfo *types.Info, call *ast.CallExpr) (analyzedSpri
 
 			verbArg := verbArgs[len(entries)]
 
-			t, ok := resolveTransformation(typesInfo, verbArg, string(verbBuf))
-			if !ok {
+			t := resolveTransformation(typesInfo, verbArg, string(verbBuf))
+			if t == nil {
 				return zero, false
 			}
 
@@ -106,13 +109,13 @@ func analyzeSprintfCall(typesInfo *types.Info, call *ast.CallExpr) (analyzedSpri
 	}, true
 }
 
-func resolveTransformation(typesInfo *types.Info, arg ast.Expr, verb string) (transformation, bool) {
+func resolveTransformation(typesInfo *types.Info, arg ast.Expr, verb string) transform.Transformation {
 	dataType, ok := typesInfo.Types[arg]
 	if !ok {
-		return nil, false
+		return nil
 	}
 	if dataType.Type == nil {
-		return nil, false
+		return nil
 	}
 	dataTypeName := dataType.Type.String()
 
@@ -121,34 +124,72 @@ func resolveTransformation(typesInfo *types.Info, arg ast.Expr, verb string) (tr
 		return resolveTransformationForSVerb(dataTypeName)
 	case "%d":
 		return resolveTransformationForDVerb(dataTypeName)
+	case "%f":
+		return resolveTransformationForFVerb(dataTypeName, verb)
 	default:
 		// TODO: support more verbs
-		return nil, false
+		return nil
 	}
 }
 
-func resolveTransformationForSVerb(typeName string) (transformation, bool) {
+func resolveTransformationForSVerb(typeName string) transform.Transformation {
 	// TODO: check if is Stringer, then use String()
 
 	switch typeName {
 	case "string":
-		return NoOp{}, true
+		return transform.NoOp{}
 	default:
-		return nil, false
+		return nil
 	}
 }
 
-func resolveTransformationForDVerb(typeName string) (transformation, bool) {
+func resolveTransformationForDVerb(typeName string) transform.Transformation {
 	switch typeName {
 	case "int":
-		return StrConv{F: StrConvFunc_Itoa}, true
+		return transform.StrConv{Op: strconvs.Itoa{}}
 	case "int64":
-		return StrConv{F: StrConvFunc_FormatInt}, true
+		return transform.StrConv{Op: strconvs.FormatInt{}}
 	case "uint64":
-		return StrConv{F: StrConvFunc_FormatUint}, true
+		return transform.StrConv{Op: strconvs.FormatUint{}}
 	// TODO: support more types
 	default:
-		return nil, false
+		return nil
+	}
+}
+
+func resolveTransformationForFVerb(typeName string, verb string) transform.Transformation {
+	var castToFloat64 bool
+
+	switch typeName {
+	case "float64":
+		castToFloat64 = false
+	case "float32":
+		castToFloat64 = true
+	default:
+		return nil
+	}
+
+	fmt, prec, ok := getFmtAndPrecFromVerb(verb)
+	if !ok {
+		return nil
+	}
+
+	return transform.StrConv{Op: strconvs.FormatFloat{
+		Fmt:           fmt,
+		Prec:          prec,
+		CastToFloat64: castToFloat64,
+	}}
+}
+
+func getFmtAndPrecFromVerb(verb string) (byte, int, bool) {
+	switch verb {
+	case "%f":
+		// The special precision -1 uses the smallest number of digits necessary
+		// such that ParseFloat will return f exactly.
+		return 'f', -1, true
+	// TODO: parse more floating-point verbs
+	default:
+		return 0, 0, false
 	}
 }
 
@@ -201,26 +242,26 @@ func addExprToSum(base *ast.BinaryExpr, e ast.Expr) *ast.BinaryExpr {
 	return base
 }
 
-func transformValue(value ast.Expr, t transformation) ast.Expr {
+func transformValue(value ast.Expr, t transform.Transformation) ast.Expr {
 	switch tt := t.(type) {
-	case NoOp:
+	case transform.NoOp:
 		return value
-	case CallStringMethod:
+	case transform.CallStringMethod:
 		panic("unimplemented") // TODO
-	case ConvertToType:
+	case transform.ConvertToType:
 		panic("unimplemented") // TODO
-	case StrConv:
+	case transform.StrConv:
 		return transformValueWithStrConv(value, tt)
 	default:
 		panic("unknown transformation")
 	}
 }
 
-func transformValueWithStrConv(value ast.Expr, tStrConv StrConv) ast.Expr {
-	// TODO: point to actual strconv object?
+func transformValueWithStrConv(value ast.Expr, tStrConv transform.StrConv) ast.Expr {
+	// TODO: point to actual strconv object? or at least dedupe strconv-ident pointers?
 
-	switch tStrConv.F {
-	case StrConvFunc_Itoa:
+	switch op := tStrConv.Op.(type) {
+	case strconvs.Itoa:
 		return &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
 				X:   &ast.Ident{Name: "strconv"},
@@ -228,7 +269,7 @@ func transformValueWithStrConv(value ast.Expr, tStrConv StrConv) ast.Expr {
 			},
 			Args: []ast.Expr{value},
 		}
-	case StrConvFunc_FormatInt:
+	case strconvs.FormatInt:
 		return &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
 				X:   &ast.Ident{Name: "strconv"},
@@ -236,13 +277,31 @@ func transformValueWithStrConv(value ast.Expr, tStrConv StrConv) ast.Expr {
 			},
 			Args: []ast.Expr{value, &ast.BasicLit{Value: "10", Kind: token.INT}},
 		}
-	case StrConvFunc_FormatUint:
+	case strconvs.FormatUint:
 		return &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
 				X:   &ast.Ident{Name: "strconv"},
 				Sel: &ast.Ident{Name: "FormatUint"},
 			},
 			Args: []ast.Expr{value, &ast.BasicLit{Value: "10", Kind: token.INT}},
+		}
+	case strconvs.FormatFloat:
+		val := value
+		if op.CastToFloat64 {
+			val = &ast.CallExpr{Fun: &ast.Ident{Name: "float64"}, Args: []ast.Expr{val}}
+		}
+
+		return &ast.CallExpr{
+			Fun: &ast.SelectorExpr{
+				X:   &ast.Ident{Name: "strconv"},
+				Sel: &ast.Ident{Name: "FormatFloat"},
+			},
+			Args: []ast.Expr{
+				val,
+				&ast.BasicLit{Value: strconv.QuoteRune(rune(op.Fmt)), Kind: token.CHAR},
+				&ast.BasicLit{Value: strconv.Itoa(op.Prec), Kind: token.INT},
+				&ast.BasicLit{Value: "64", Kind: token.INT},
+			},
 		}
 	default:
 		panic("unknown strconv operation")

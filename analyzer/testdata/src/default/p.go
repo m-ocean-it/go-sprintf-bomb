@@ -11,5 +11,8 @@ func foo() {
 
 	_ = fmt.Sprintf("%s, %s, %s", "a", "b", "c") // want "foobar"
 
-	_ = fmt.Sprintf("%s is %d years old", "John", 3) // want "foobar"
+	_ = fmt.Sprintf("%s is %d years old. Pi is %f", "John", 3, 3.14) // want "foobar"
+
+	f32 := float32(3.14)
+	_ = fmt.Sprintf("Pi is %f", f32) // want "foobar"
 }
