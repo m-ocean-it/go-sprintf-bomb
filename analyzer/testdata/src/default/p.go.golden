@@ -1,6 +1,9 @@
 package p
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 func foo() {
 	i64 := int64(2)
@@ -20,6 +23,11 @@ func foo() {
 	_ = "This is " +
 
 		cs.String() // want "Sprintf could be optimized away"
+
+	err := errors.New("some error")
+	_ = "this is an error: " +
+
+		err.Error() // want "Sprintf could be optimized away"
 }
 
 type customStringer struct{}

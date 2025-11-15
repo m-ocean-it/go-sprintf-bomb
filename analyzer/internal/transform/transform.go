@@ -14,6 +14,10 @@ type CallStringMethod struct{}
 
 func (c CallStringMethod) isTransformation() {}
 
+type CallErrorMethod struct{}
+
+func (c CallErrorMethod) isTransformation() {}
+
 type ConvertToType struct {
 	Type any // FIXME: specify correct type
 }
@@ -25,5 +29,3 @@ type StrConv struct {
 }
 
 func (s StrConv) isTransformation() {}
-
-// TODO: add CallErrorMethod

@@ -134,14 +134,17 @@ func resolveTransformation(typesInfo *types.Info, arg ast.Expr, verb string) tra
 }
 
 func resolveTransformationForSVerb(t types.Type) transform.Transformation {
-	// TODO: check, also, types.Implements(T, knowledge.Interfaces["error"] and return CallErrorMethod if does
-
 	if types.Implements(t, knowledge.Interfaces["fmt.Stringer"]) {
 		return transform.CallStringMethod{}
 	}
 
+	if types.Implements(t, knowledge.Interfaces["error"]) {
+		return transform.CallErrorMethod{}
+	}
+
+	// TODO: check underlying type
 	switch t.String() {
-	case "string": // TODO: check, also, if underlying type is string
+	case "string":
 		return transform.NoOp{}
 	default:
 		return nil
@@ -149,6 +152,7 @@ func resolveTransformationForSVerb(t types.Type) transform.Transformation {
 }
 
 func resolveTransformationForDVerb(typeName string) transform.Transformation {
+	// TODO: check underlying type
 	switch typeName {
 	case "int":
 		return transform.StrConv{Op: strconvs.Itoa{}}
@@ -163,6 +167,7 @@ func resolveTransformationForDVerb(typeName string) transform.Transformation {
 }
 
 func resolveTransformationForFVerb(typeName string, verb string) transform.Transformation {
+	// TODO: check underlying type
 	var castToFloat64 bool
 
 	switch typeName {
@@ -253,6 +258,8 @@ func transformValue(value ast.Expr, t transform.Transformation) ast.Expr {
 		return value
 	case transform.CallStringMethod:
 		return transformValueToCallStringMethod(value)
+	case transform.CallErrorMethod:
+		return transformValueToCallErrorMethod(value)
 	case transform.ConvertToType:
 		panic("unimplemented") // TODO
 	case transform.StrConv:
@@ -316,9 +323,17 @@ func transformValueWithStrConv(value ast.Expr, tStrConv transform.StrConv) ast.E
 func transformValueToCallStringMethod(value ast.Expr) ast.Expr {
 	return &ast.CallExpr{
 		Fun: &ast.SelectorExpr{
-			X: value,
-			// X:   &ast.Ident{Name: "strconv"}, // FIXME: remove
+			X:   value,
 			Sel: &ast.Ident{Name: "String"},
+		},
+	}
+}
+
+func transformValueToCallErrorMethod(value ast.Expr) ast.Expr {
+	return &ast.CallExpr{
+		Fun: &ast.SelectorExpr{
+			X:   value,
+			Sel: &ast.Ident{Name: "Error"},
 		},
 	}
 }

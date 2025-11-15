@@ -1,6 +1,9 @@
 package p
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 func foo() {
 	i64 := int64(2)
@@ -18,6 +21,9 @@ func foo() {
 
 	cs := customStringer{}
 	_ = fmt.Sprintf("This is %s", cs) // want "Sprintf could be optimized away"
+
+	err := errors.New("some error")
+	_ = fmt.Sprintf("this is an error: %s", err) // want "Sprintf could be optimized away"
 }
 
 type customStringer struct{}
