@@ -15,4 +15,13 @@ func foo() {
 
 	f32 := float32(3.14)
 	_ = fmt.Sprintf("Pi is %f", f32) // want "Sprintf could be optimized away"
+
+	cs := customStringer{}
+	_ = fmt.Sprintf("This is %s", cs) // want "Sprintf could be optimized away"
+}
+
+type customStringer struct{}
+
+func (c customStringer) String() string {
+	return "Hello from custom stringer!"
 }

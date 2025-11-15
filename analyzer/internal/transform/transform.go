@@ -25,3 +25,5 @@ type StrConv struct {
 }
 
 func (s StrConv) isTransformation() {}
+
+// TODO: add CallErrorMethod

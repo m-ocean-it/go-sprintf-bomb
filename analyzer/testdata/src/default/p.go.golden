@@ -15,4 +15,15 @@ func foo() {
 
 	f32 := float32(3.14)
 	_ = "Pi is " + strconv.FormatFloat(float64(f32), 'f', -1, 64) // want "Sprintf could be optimized away"
+
+	cs := customStringer{}
+	_ = "This is " +
+
+		cs.String() // want "Sprintf could be optimized away"
+}
+
+type customStringer struct{}
+
+func (c customStringer) String() string {
+	return "Hello from custom stringer!"
 }

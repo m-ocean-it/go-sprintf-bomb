@@ -9,6 +9,7 @@ import (
 
 	"github.com/m-ocean-it/go-sprintf-bomb/analyzer/internal/strconvs"
 	"github.com/m-ocean-it/go-sprintf-bomb/analyzer/internal/transform"
+	"github.com/m-ocean-it/go-sprintf-bomb/analyzer/knowledge"
 )
 
 func ProcessSprintfCall(typesInfo *types.Info, call *ast.CallExpr) (ast.Expr, bool) {
@@ -121,7 +122,7 @@ func resolveTransformation(typesInfo *types.Info, arg ast.Expr, verb string) tra
 
 	switch verb {
 	case "%s":
-		return resolveTransformationForSVerb(dataTypeName)
+		return resolveTransformationForSVerb(dataType.Type)
 	case "%d":
 		return resolveTransformationForDVerb(dataTypeName)
 	case "%f":
@@ -132,11 +133,15 @@ func resolveTransformation(typesInfo *types.Info, arg ast.Expr, verb string) tra
 	}
 }
 
-func resolveTransformationForSVerb(typeName string) transform.Transformation {
-	// TODO: check if is Stringer, then use String()
+func resolveTransformationForSVerb(t types.Type) transform.Transformation {
+	// TODO: check, also, types.Implements(T, knowledge.Interfaces["error"] and return CallErrorMethod if does
 
-	switch typeName {
-	case "string":
+	if types.Implements(t, knowledge.Interfaces["fmt.Stringer"]) {
+		return transform.CallStringMethod{}
+	}
+
+	switch t.String() {
+	case "string": // TODO: check, also, if underlying type is string
 		return transform.NoOp{}
 	default:
 		return nil
@@ -247,7 +252,7 @@ func transformValue(value ast.Expr, t transform.Transformation) ast.Expr {
 	case transform.NoOp:
 		return value
 	case transform.CallStringMethod:
-		panic("unimplemented") // TODO
+		return transformValueToCallStringMethod(value)
 	case transform.ConvertToType:
 		panic("unimplemented") // TODO
 	case transform.StrConv:
@@ -305,5 +310,15 @@ func transformValueWithStrConv(value ast.Expr, tStrConv transform.StrConv) ast.E
 		}
 	default:
 		panic("unknown strconv operation")
+	}
+}
+
+func transformValueToCallStringMethod(value ast.Expr) ast.Expr {
+	return &ast.CallExpr{
+		Fun: &ast.SelectorExpr{
+			X: value,
+			// X:   &ast.Ident{Name: "strconv"}, // FIXME: remove
+			Sel: &ast.Ident{Name: "String"},
+		},
 	}
 }
