@@ -158,9 +158,12 @@ func resolveTransformationForDVerb(typeName string) transform.Transformation {
 		return transform.StrConv{Op: strconvs.Itoa{}}
 	case "int64":
 		return transform.StrConv{Op: strconvs.FormatInt{}}
+	case "int32", "int16", "int8":
+		return transform.StrConv{Op: strconvs.FormatInt{CastToInt64: true}}
 	case "uint64":
 		return transform.StrConv{Op: strconvs.FormatUint{}}
-	// TODO: support more types
+	case "uint32", "uint16", "uint8", "uint":
+		return transform.StrConv{Op: strconvs.FormatUint{CastToUint64: true}}
 	default:
 		return nil
 	}
@@ -273,6 +276,7 @@ func transformValueWithStrConv(value ast.Expr, tStrConv transform.StrConv) ast.E
 	// TODO: point to actual strconv object? or at least dedupe strconv-ident pointers?
 
 	switch op := tStrConv.Op.(type) {
+
 	case strconvs.Itoa:
 		return &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
@@ -281,7 +285,12 @@ func transformValueWithStrConv(value ast.Expr, tStrConv transform.StrConv) ast.E
 			},
 			Args: []ast.Expr{value},
 		}
+
 	case strconvs.FormatInt:
+		if op.CastToInt64 {
+			value = &ast.CallExpr{Fun: &ast.Ident{Name: "int64"}, Args: []ast.Expr{value}}
+		}
+
 		return &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
 				X:   &ast.Ident{Name: "strconv"},
@@ -289,7 +298,12 @@ func transformValueWithStrConv(value ast.Expr, tStrConv transform.StrConv) ast.E
 			},
 			Args: []ast.Expr{value, &ast.BasicLit{Value: "10", Kind: token.INT}},
 		}
+
 	case strconvs.FormatUint:
+		if op.CastToUint64 {
+			value = &ast.CallExpr{Fun: &ast.Ident{Name: "uint64"}, Args: []ast.Expr{value}}
+		}
+
 		return &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
 				X:   &ast.Ident{Name: "strconv"},
@@ -297,6 +311,7 @@ func transformValueWithStrConv(value ast.Expr, tStrConv transform.StrConv) ast.E
 			},
 			Args: []ast.Expr{value, &ast.BasicLit{Value: "10", Kind: token.INT}},
 		}
+
 	case strconvs.FormatFloat:
 		val := value
 		if op.CastToFloat64 {
@@ -315,6 +330,7 @@ func transformValueWithStrConv(value ast.Expr, tStrConv transform.StrConv) ast.E
 				&ast.BasicLit{Value: "64", Kind: token.INT},
 			},
 		}
+
 	default:
 		panic("unknown strconv operation")
 	}

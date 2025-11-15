@@ -8,11 +8,15 @@ type Itoa struct{}
 
 func (i Itoa) isOp() {}
 
-type FormatInt struct{}
+type FormatInt struct {
+	CastToInt64 bool
+}
 
 func (f FormatInt) isOp() {}
 
-type FormatUint struct{}
+type FormatUint struct {
+	CastToUint64 bool
+}
 
 func (f FormatUint) isOp() {}
 

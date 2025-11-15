@@ -9,6 +9,15 @@ func foo() {
 	i64 := int64(2)
 	_ = "High " + strconv.FormatInt(i64, 10) + "!" // want "Sprintf could be optimized away"
 
+	i32 := int32(2)
+	_ = "High " + strconv.FormatInt(int64(i32), 10) + "!" // want "Sprintf could be optimized away"
+
+	i16 := int16(2)
+	_ = "High " + strconv.FormatInt(int64(i16), 10) + "!" // want "Sprintf could be optimized away"
+
+	i8 := int8(2)
+	_ = "High " + strconv.FormatInt(int64(i8), 10) + "!" // want "Sprintf could be optimized away"
+
 	i := 2
 	_ = strconv.Itoa(i) + " is int" // want "Sprintf could be optimized away"
 
@@ -24,6 +33,21 @@ func foo() {
 
 	err := errors.New("some error")
 	_ = "this is an error: " + err.Error() // want "Sprintf could be optimized away"
+
+	u := uint(10)
+	_ = ":" + strconv.FormatUint(uint64(u), 10) // want "Sprintf could be optimized away"
+
+	u64 := uint64(5000)
+	_ = ":" + strconv.FormatUint(u64, 10) // want "Sprintf could be optimized away"
+
+	u32 := uint32(190)
+	_ = ":" + strconv.FormatUint(uint64(u32), 10) // want "Sprintf could be optimized away"
+
+	u16 := uint16(5)
+	_ = ":" + strconv.FormatUint(uint64(u16), 10) // want "Sprintf could be optimized away"
+
+	u8 := uint8(150)
+	_ = ":" + strconv.FormatUint(uint64(u8), 10) // want "Sprintf could be optimized away"
 }
 
 type customStringer struct{}
