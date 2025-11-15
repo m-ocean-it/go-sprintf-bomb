@@ -10,13 +10,20 @@ It's a linter that tries to replace `fmt.Sprintf` calls with more efficient stri
 
 Before applied fixes:
 ```go
-_ = fmt.Sprintf("%s is %d years old. Pi is %f", "John", 3, 3.14)
+name := "John"
+age := 3
+pi := 3.14
+_ = fmt.Sprintf("%s is %d years old. Pi is %f", name, age, pi)
 ```
 After applied fixes:
 ```go
-_ = "John" + " is " + strconv.Itoa(3) + " years old. Pi is " + strconv.FormatFloat(3.14, 'f', -1, 64)
+name := "John"
+age := 3
+pi := 3.14
+_ = name + " is " + strconv.Itoa(age) + " years old. Pi is " + strconv.FormatFloat(pi, 'f', -1, 64)
 ```
-(Not optimal at the moment, since, for example, `strconv.Itoa(3)` could simply be written as part of the string, i.e. `John is 3 years old`.)
+
+More examples of possible transformations can be found in the `analyzer/testdata/src/default/p.go.golden` file.
 
 ## Installation
 ```sh
