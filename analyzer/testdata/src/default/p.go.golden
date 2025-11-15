@@ -20,14 +20,10 @@ func foo() {
 	_ = "Pi is " + strconv.FormatFloat(float64(f32), 'f', -1, 64) // want "Sprintf could be optimized away"
 
 	cs := customStringer{}
-	_ = "This is " +
-
-		cs.String() // want "Sprintf could be optimized away"
+	_ = "This is " + cs.String() // want "Sprintf could be optimized away"
 
 	err := errors.New("some error")
-	_ = "this is an error: " +
-
-		err.Error() // want "Sprintf could be optimized away"
+	_ = "this is an error: " + err.Error() // want "Sprintf could be optimized away"
 }
 
 type customStringer struct{}

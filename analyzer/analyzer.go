@@ -1,12 +1,12 @@
 package analyzer
 
 import (
-	"bytes"
 	"go/ast"
 	"go/format"
 	"go/token"
 	"go/types"
 	"slices"
+	"strings"
 
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/inspect"
@@ -134,9 +134,50 @@ func isVerb(rs string) bool {
 }
 
 func formatNode(fset *token.FileSet, node ast.Node) string {
-	buf := new(bytes.Buffer)
-	if err := format.Node(buf, fset, node); err != nil {
-		return ""
+	binExpr := node.(*ast.BinaryExpr)
+
+	return formatBinaryExpr(fset, binExpr)
+}
+
+func formatBinaryExpr(fset *token.FileSet, node ast.Node) string {
+	binExpr := node.(*ast.BinaryExpr)
+
+	stringBuilder := &strings.Builder{}
+
+	stack := []*ast.BinaryExpr{binExpr}
+	var popped bool
+
+	for len(stack) > 0 {
+		lastBinExpr := stack[len(stack)-1]
+
+		if lastBinExpr.Op != token.ADD {
+			panic("wrong op")
+		}
+
+		if popped {
+			stringBuilder.WriteString(" + ")
+
+			if err := format.Node(stringBuilder, fset, lastBinExpr.Y); err != nil {
+				return ""
+			}
+			stack = stack[:len(stack)-1] // pop
+			popped = true
+
+			continue
+		}
+
+		switch x := lastBinExpr.X.(type) {
+		case *ast.BinaryExpr:
+			stack = append(stack, x)
+			popped = false
+			continue
+		default:
+			if err := format.Node(stringBuilder, fset, x); err != nil {
+				return ""
+			}
+			popped = true
+		}
 	}
-	return buf.String()
+
+	return stringBuilder.String()
 }
