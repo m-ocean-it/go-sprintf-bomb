@@ -40,3 +40,8 @@ go-sprintf-bomb --fix ./...  # to apply all fixes
 
 - Package imports aren't handled. You might need to fix them yourself after applying the fixes. (For example, a fix might introduce a dependency on `strconv`, but the package won't be automatically added to the `imports` section.)
 - Incomplete. A lot of cases would be simply skipped.
+
+## TODO
+
+- [ ] Add tests for comparing the resulting strings to using fmt.Sprintf. The strings must be the same.
+- [ ] Fix imports automatically.
