@@ -20,6 +20,7 @@ func foo() {
 
 	i := 2
 	_ = strconv.Itoa(i) + " is int" // want "Sprintf could be optimized away"
+	_ = strconv.Itoa(i) // want "Sprintf could be optimized away"
 
 	_ = "a" + ", " + "b" + ", " + "c" // want "Sprintf could be optimized away"
 

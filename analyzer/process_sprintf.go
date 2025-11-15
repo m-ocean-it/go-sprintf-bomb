@@ -211,6 +211,17 @@ func constructResult(analyzed analyzedSprintfCall) (ast.Expr, bool) {
 		return nil, false
 	}
 
+	if len(analyzed.args) == 1 {
+		arg := analyzed.args[0]
+
+		head := analyzed.originalText[:arg.position[0]]
+		tail := analyzed.originalText[arg.position[1]:]
+
+		if head == "" && tail == "" {
+			return transformValue(arg.value, arg.transformation), true
+		}
+	}
+
 	res := &ast.BinaryExpr{
 		Op: token.ADD,
 	}

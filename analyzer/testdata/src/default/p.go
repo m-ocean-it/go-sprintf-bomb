@@ -20,6 +20,7 @@ func foo() {
 
 	i := 2
 	_ = fmt.Sprintf("%d is int", i) // want "Sprintf could be optimized away"
+	_ = fmt.Sprintf("%d", i)        // want "Sprintf could be optimized away"
 
 	_ = fmt.Sprintf("%s, %s, %s", "a", "b", "c") // want "Sprintf could be optimized away"
 

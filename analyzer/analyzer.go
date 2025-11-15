@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"bytes"
 	"go/ast"
 	"go/format"
 	"go/token"
@@ -134,9 +135,21 @@ func isVerb(rs string) bool {
 }
 
 func formatNode(fset *token.FileSet, node ast.Node) string {
-	binExpr := node.(*ast.BinaryExpr)
+	switch n := node.(type) {
+	case *ast.BinaryExpr:
+		return formatBinaryExpr(fset, n)
+	default:
+		return formatAnyNode(fset, n)
+	}
+}
 
-	return formatBinaryExpr(fset, binExpr)
+func formatAnyNode(fset *token.FileSet, node ast.Node) string {
+	buf := new(bytes.Buffer)
+	if err := format.Node(buf, fset, node); err != nil {
+		return ""
+	}
+
+	return buf.String()
 }
 
 func formatBinaryExpr(fset *token.FileSet, node ast.Node) string {
