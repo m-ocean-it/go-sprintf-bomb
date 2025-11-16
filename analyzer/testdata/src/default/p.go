@@ -49,10 +49,31 @@ func foo() {
 
 	u8 := uint8(150)
 	_ = fmt.Sprintf(":%d", u8) // want "Sprintf could be optimized away"
+
+	strerError := stringerError("hello world")
+	_ = fmt.Sprintf("%s", strerError) // want "Sprintf could be optimized away"
+
+	strError := stringError("hello world")
+	_ = fmt.Sprintf("%s", strError) // want "Sprintf could be optimized away"
 }
 
 type customStringer struct{}
 
 func (c customStringer) String() string {
 	return "Hello from custom stringer!"
+}
+
+type stringerError string
+
+func (s stringerError) String() string {
+	return "String()"
+}
+func (s stringerError) Error() string {
+	return "Error()"
+}
+
+type stringError string
+
+func (s stringError) Error() string {
+	return "Error()"
 }

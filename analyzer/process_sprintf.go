@@ -143,14 +143,12 @@ func resolveTransformation(typesInfo *types.Info, arg ast.Expr, verb string) tra
 }
 
 func resolveTransformationForSVerb(t types.Type) transform.Transformation {
-	// TODO: check if order of checks is correct (Stringer -> Error -> string-type)
+	if types.Implements(t, knowledge.Interfaces["error"]) {
+		return transform.CallErrorMethod{}
+	}
 
 	if types.Implements(t, knowledge.Interfaces["fmt.Stringer"]) {
 		return transform.CallStringMethod{}
-	}
-
-	if types.Implements(t, knowledge.Interfaces["error"]) {
-		return transform.CallErrorMethod{}
 	}
 
 	// TODO: check underlying type
