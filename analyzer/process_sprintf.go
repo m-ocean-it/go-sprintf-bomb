@@ -133,7 +133,7 @@ func resolveTransformation(typesInfo *types.Info, arg ast.Expr, verb string) tra
 	case "%s":
 		return resolveTransformationForSVerb(dataType.Type)
 	case "%d":
-		return resolveTransformationForDVerb(dataTypeName)
+		return resolveTransformationForDVerb(dataType.Type)
 	case "%f":
 		return resolveTransformationForFVerb(dataTypeName, verb)
 	default:
@@ -162,9 +162,8 @@ func resolveTransformationForSVerb(t types.Type) transform.Transformation {
 	return nil
 }
 
-func resolveTransformationForDVerb(typeName string) transform.Transformation {
-	// TODO: check underlying type
-	switch typeName {
+func resolveTransformationForDVerb(t types.Type) transform.Transformation {
+	switch t.String() {
 	case "int":
 		return transform.StrConv{Op: strconvs.Itoa{}}
 	case "int64":
@@ -175,9 +174,22 @@ func resolveTransformationForDVerb(typeName string) transform.Transformation {
 		return transform.StrConv{Op: strconvs.FormatUint{}}
 	case "uint32", "uint16", "uint8", "uint":
 		return transform.StrConv{Op: strconvs.FormatUint{CastToUint64: true}}
-	default:
-		return nil
 	}
+
+	switch t.Underlying().String() {
+	case "int":
+		return transform.StrConv{Op: strconvs.Itoa{CastToInt: true}}
+	case "int64":
+		return transform.StrConv{Op: strconvs.FormatInt{CastToInt64: true}}
+	case "int32", "int16", "int8":
+		return transform.StrConv{Op: strconvs.FormatInt{CastToInt64: true}}
+	case "uint64":
+		return transform.StrConv{Op: strconvs.FormatUint{CastToUint64: true}}
+	case "uint32", "uint16", "uint8", "uint":
+		return transform.StrConv{Op: strconvs.FormatUint{CastToUint64: true}}
+	}
+
+	return nil
 }
 
 func resolveTransformationForFVerb(typeName string, verb string) transform.Transformation {
@@ -308,6 +320,10 @@ func transformValueWithStrConv(value ast.Expr, tStrConv transform.StrConv) ast.E
 	switch op := tStrConv.Op.(type) {
 
 	case strconvs.Itoa:
+		if op.CastToInt {
+			value = &ast.CallExpr{Fun: &ast.Ident{Name: "int"}, Args: []ast.Expr{value}}
+		}
+
 		return &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
 				X:   &ast.Ident{Name: "strconv"},

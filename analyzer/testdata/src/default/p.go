@@ -58,6 +58,12 @@ func foo() {
 
 	wrStr := wrappedString("hello world")
 	_ = fmt.Sprintf("wrapped string: %s", wrStr) // want "Sprintf could be optimized away"
+
+	wrInt := wrappedInt(-2)
+	_ = fmt.Sprintf("wrapped int: %d!", wrInt) // want "Sprintf could be optimized away"
+
+	wrU32 := wrappedUint32(3)
+	_ = fmt.Sprintf("wrapped uint32: %d", wrU32) // want "Sprintf could be optimized away"
 }
 
 type customStringer struct{}
@@ -82,3 +88,7 @@ func (s stringError) Error() string {
 }
 
 type wrappedString string
+
+type wrappedInt int
+
+type wrappedUint32 uint32

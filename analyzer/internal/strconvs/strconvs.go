@@ -4,7 +4,9 @@ type Op interface {
 	isOp()
 }
 
-type Itoa struct{}
+type Itoa struct {
+	CastToInt bool
+}
 
 func (i Itoa) isOp() {}
 
