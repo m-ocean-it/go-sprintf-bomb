@@ -13,14 +13,16 @@ Before applied fixes:
 name := "John"
 age := 3
 pi := 3.14
-_ = fmt.Sprintf("%s is %d years old. Pi is %f", name, age, pi)
+err := errors.New("some error")
+_ = fmt.Sprintf("%s is %d years old. Pi is %f. And some error: %s", name, age, pi, err)
 ```
 After applied fixes:
 ```go
 name := "John"
 age := 3
 pi := 3.14
-_ = name + " is " + strconv.Itoa(age) + " years old. Pi is " + strconv.FormatFloat(pi, 'f', -1, 64)
+err := errors.New("some error")
+_ = name + " is " + strconv.Itoa(age) + " years old. Pi is " + strconv.FormatFloat(pi, 'f', -1, 64) + ". And some error: " + err.Error()
 ```
 
 More examples of possible transformations can be found in the `analyzer/testdata/src/default/p.go.golden` file.
@@ -38,10 +40,10 @@ go-sprintf-bomb --fix ./...  # to apply all fixes
 
 ## Issues
 
-- Package imports aren't handled. You might need to fix them yourself after applying the fixes. (For example, a fix might introduce a dependency on `strconv`, but the package won't be automatically added to the `imports` section.)
-- Incomplete. A lot of cases would be simply skipped.
+- Incomplete. A lot of cases would simply be skipped.
+- The longer the string and the more placeholders are used in a `Sprintf`-call, the less significant the optimization would be. It might be useful to add some heuristics to the linter to avoid actually harming the performance.
 
 ## TODO
 
 - [ ] Add tests for comparing the resulting strings to using fmt.Sprintf. The strings must be the same.
-- [ ] Fix imports automatically.
+- [x] Fix imports automatically.
