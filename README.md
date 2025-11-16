@@ -81,5 +81,7 @@ go-sprintf-bomb --fix ./...
 
 ## TODO
 
+- [ ] Format bools with `%t` and `%v` directives.
+- [ ] Format (u)ints with `%v` directive?
 - [ ] Add tests for comparing the resulting strings to using `fmt.Sprintf`. The strings must be the same.
 - [ ] Support complex float-formatting (i.e. consider more directives than just the plain `%f`).
