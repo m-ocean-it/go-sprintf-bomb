@@ -64,6 +64,9 @@ func foo() {
 
 	wrU32 := wrappedUint32(3)
 	_ = fmt.Sprintf("wrapped uint32: %d", wrU32) // want "Sprintf could be optimized away"
+
+	wrF64 := wrappedFloat64(2.3)
+	_ = fmt.Sprintf("wrapped float64: %f", wrF64) // want "Sprintf could be optimized away"
 }
 
 type customStringer struct{}
@@ -92,3 +95,5 @@ type wrappedString string
 type wrappedInt int
 
 type wrappedUint32 uint32
+
+type wrappedFloat64 float64

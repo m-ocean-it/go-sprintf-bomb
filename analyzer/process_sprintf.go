@@ -127,7 +127,6 @@ func resolveTransformation(typesInfo *types.Info, arg ast.Expr, verb string) tra
 	if dataType.Type == nil {
 		return nil
 	}
-	dataTypeName := dataType.Type.String()
 
 	switch verb {
 	case "%s":
@@ -135,7 +134,7 @@ func resolveTransformation(typesInfo *types.Info, arg ast.Expr, verb string) tra
 	case "%d":
 		return resolveTransformationForDVerb(dataType.Type)
 	case "%f":
-		return resolveTransformationForFVerb(dataTypeName, verb)
+		return resolveTransformationForFVerb(dataType.Type, verb)
 	default:
 		// TODO: support more verbs
 		return nil
@@ -192,17 +191,22 @@ func resolveTransformationForDVerb(t types.Type) transform.Transformation {
 	return nil
 }
 
-func resolveTransformationForFVerb(typeName string, verb string) transform.Transformation {
-	// TODO: check underlying type
+func resolveTransformationForFVerb(t types.Type, verb string) transform.Transformation {
 	var castToFloat64 bool
 
-	switch typeName {
+	switch t.String() {
 	case "float64":
-		castToFloat64 = false
 	case "float32":
 		castToFloat64 = true
 	default:
-		return nil
+		switch t.Underlying().String() {
+		case "float64":
+		case "float32":
+		default:
+			return nil
+		}
+
+		castToFloat64 = true
 	}
 
 	fmt, prec, ok := getFmtAndPrecFromVerb(verb)
