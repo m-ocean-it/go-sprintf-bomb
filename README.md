@@ -81,6 +81,7 @@ go-sprintf-bomb --fix ./...
 
 ## TODO
 
+- [ ] Make behavior-changing transformations (`.Error()`, `.String()`. etc.) optional.
 - [ ] Format bools with `%t` and `%v` directives.
 - [ ] Format (u)ints with `%v` directive?
 - [ ] Add tests for comparing the resulting strings to using `fmt.Sprintf`. The strings must be the same.
