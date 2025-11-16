@@ -55,6 +55,9 @@ func foo() {
 
 	strError := stringError("hello world")
 	_ = fmt.Sprintf("%s", strError) // want "Sprintf could be optimized away"
+
+	wrStr := wrappedString("hello world")
+	_ = fmt.Sprintf("wrapped string: %s", wrStr) // want "Sprintf could be optimized away"
 }
 
 type customStringer struct{}
@@ -77,3 +80,5 @@ type stringError string
 func (s stringError) Error() string {
 	return "Error()"
 }
+
+type wrappedString string

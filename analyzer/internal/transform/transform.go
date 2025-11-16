@@ -18,11 +18,11 @@ type CallErrorMethod struct{}
 
 func (c CallErrorMethod) isTransformation() {}
 
-type ConvertToType struct {
-	Type any // FIXME: specify correct type
+type Wrap struct {
+	Wrapper string
 }
 
-func (c ConvertToType) isTransformation() {}
+func (c Wrap) isTransformation() {}
 
 type StrConv struct {
 	Op strconvs.Op

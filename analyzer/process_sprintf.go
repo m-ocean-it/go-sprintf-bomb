@@ -151,13 +151,15 @@ func resolveTransformationForSVerb(t types.Type) transform.Transformation {
 		return transform.CallStringMethod{}
 	}
 
-	// TODO: check underlying type
-	switch t.String() {
-	case "string":
+	if t.String() == "string" {
 		return transform.NoOp{}
-	default:
-		return nil
 	}
+
+	if t.Underlying().String() == "string" {
+		return transform.Wrap{Wrapper: "string"}
+	}
+
+	return nil
 }
 
 func resolveTransformationForDVerb(typeName string) transform.Transformation {
@@ -291,8 +293,8 @@ func transformValue(value ast.Expr, t transform.Transformation) (ast.Expr, bool)
 		return transformValueToCallStringMethod(value), false
 	case transform.CallErrorMethod:
 		return transformValueToCallErrorMethod(value), false
-	case transform.ConvertToType:
-		panic("unimplemented") // TODO
+	case transform.Wrap:
+		return transformValueWithWrap(value, tt), false
 	case transform.StrConv:
 		return transformValueWithStrConv(value, tt), true
 	default:
@@ -378,6 +380,15 @@ func transformValueToCallErrorMethod(value ast.Expr) ast.Expr {
 		Fun: &ast.SelectorExpr{
 			X:   value,
 			Sel: &ast.Ident{Name: "Error"},
+		},
+	}
+}
+
+func transformValueWithWrap(value ast.Expr, wrap transform.Wrap) ast.Expr {
+	return &ast.CallExpr{
+		Fun: &ast.Ident{Name: wrap.Wrapper},
+		Args: []ast.Expr{
+			value,
 		},
 	}
 }
