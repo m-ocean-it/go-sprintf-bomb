@@ -12,15 +12,24 @@ import (
 	"github.com/m-ocean-it/go-sprintf-bomb/analyzer/knowledge"
 )
 
-func ProcessSprintfCall(typesInfo *types.Info, call *ast.CallExpr) (ast.Expr, bool) {
+func ProcessSprintfCall(
+	typesInfo *types.Info,
+	call *ast.CallExpr,
+	filePkgOut *packagesFileResult,
+) (ast.Expr, bool) {
 	analyzed, ok := analyzeSprintfCall(typesInfo, call)
 	if !ok {
 		return nil, false
 	}
 
-	result, ok := constructResult(analyzed)
+	result, addedStrConv, ok := constructResult(analyzed)
 	if !ok {
 		return nil, false
+	}
+
+	filePkgOut.fmtCount--
+	if addedStrConv {
+		filePkgOut.addedStrConv = addedStrConv
 	}
 
 	return result, true
@@ -208,9 +217,9 @@ func getFmtAndPrecFromVerb(verb string) (byte, int, bool) {
 	}
 }
 
-func constructResult(analyzed analyzedSprintfCall) (ast.Expr, bool) {
+func constructResult(analyzed analyzedSprintfCall) (ast.Expr, bool, bool) {
 	if len(analyzed.args) == 0 {
-		return nil, false
+		return nil, false, false
 	}
 
 	if len(analyzed.args) == 1 {
@@ -220,7 +229,9 @@ func constructResult(analyzed analyzedSprintfCall) (ast.Expr, bool) {
 		tail := analyzed.originalText[arg.position[1]:]
 
 		if head == "" && tail == "" {
-			return transformValue(arg.value, arg.transformation), true
+			newVal, addedStrConv := transformValue(arg.value, arg.transformation)
+
+			return newVal, addedStrConv, true
 		}
 	}
 
@@ -228,7 +239,10 @@ func constructResult(analyzed analyzedSprintfCall) (ast.Expr, bool) {
 		Op: token.ADD,
 	}
 
-	var cursor int
+	var (
+		cursor       int
+		addedStrConv bool
+	)
 
 	for _, arg := range analyzed.args {
 		head := analyzed.originalText[cursor:arg.position[0]]
@@ -239,7 +253,10 @@ func constructResult(analyzed analyzedSprintfCall) (ast.Expr, bool) {
 			})
 		}
 
-		newValueExpr := transformValue(arg.value, arg.transformation)
+		newValueExpr, strConv := transformValue(arg.value, arg.transformation)
+		if strConv {
+			addedStrConv = true
+		}
 
 		res = addExprToSum(res, newValueExpr)
 
@@ -253,7 +270,7 @@ func constructResult(analyzed analyzedSprintfCall) (ast.Expr, bool) {
 		})
 	}
 
-	return res, true
+	return res, addedStrConv, true
 }
 
 func addExprToSum(base *ast.BinaryExpr, e ast.Expr) *ast.BinaryExpr {
@@ -268,18 +285,18 @@ func addExprToSum(base *ast.BinaryExpr, e ast.Expr) *ast.BinaryExpr {
 	return base
 }
 
-func transformValue(value ast.Expr, t transform.Transformation) ast.Expr {
+func transformValue(value ast.Expr, t transform.Transformation) (ast.Expr, bool) {
 	switch tt := t.(type) {
 	case transform.NoOp:
-		return value
+		return value, false
 	case transform.CallStringMethod:
-		return transformValueToCallStringMethod(value)
+		return transformValueToCallStringMethod(value), false
 	case transform.CallErrorMethod:
-		return transformValueToCallErrorMethod(value)
+		return transformValueToCallErrorMethod(value), false
 	case transform.ConvertToType:
 		panic("unimplemented") // TODO
 	case transform.StrConv:
-		return transformValueWithStrConv(value, tt)
+		return transformValueWithStrConv(value, tt), true
 	default:
 		panic("unknown transformation")
 	}

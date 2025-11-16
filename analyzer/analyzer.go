@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"go/types"
 	"slices"
+	"strconv"
 	"strings"
 
 	"golang.org/x/tools/go/analysis"
@@ -24,19 +25,57 @@ func New() *analysis.Analyzer {
 	}
 }
 
+type filePath = string
+type packagesOutput = map[filePath]*packagesFileResult
+
+type packagesFileResult struct {
+	fmtCount     int
+	addedStrConv bool
+}
+
 func run(pass *analysis.Pass) (any, error) {
 	insp := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 	nodeFilter := []ast.Node{
 		(*ast.CallExpr)(nil),
 	}
 
+	packagesResult := packagesOutput{}
+
 	insp.Preorder(nodeFilter, func(node ast.Node) {
-		diagnostic := processNode(pass.Fset, pass.TypesInfo, node)
+		diagnostic := processNode(pass.Fset, pass.TypesInfo, node, packagesResult)
 		if diagnostic == nil {
 			return
 		}
 
 		pass.Report(*diagnostic)
+	})
+
+	importSpecFilter := []ast.Node{
+		(*ast.GenDecl)(nil),
+	}
+
+	insp.Preorder(importSpecFilter, func(n ast.Node) {
+		genDecl, _ := n.(*ast.GenDecl)
+		if genDecl == nil {
+			return // just in case...
+		}
+
+		if genDecl.Tok != token.IMPORT {
+			return
+		}
+
+		fPath := pass.Fset.Position(genDecl.TokPos).Filename
+		filePkgResult := packagesResult[fPath]
+		if filePkgResult == nil {
+			return
+		}
+
+		importDiagnostic := processImportBlock(pass.Fset, genDecl, filePkgResult)
+		if importDiagnostic == nil {
+			return
+		}
+
+		pass.Report(*importDiagnostic)
 	})
 
 	return nil, nil
@@ -47,7 +86,6 @@ func newAnalysisDiagnostic(
 	message string,
 	suggestedFixes []analysis.SuggestedFix,
 ) *analysis.Diagnostic {
-
 	return &analysis.Diagnostic{
 		Pos:            analysisRange.Pos(),
 		End:            analysisRange.End(),
@@ -56,7 +94,12 @@ func newAnalysisDiagnostic(
 	}
 }
 
-func processNode(fset *token.FileSet, typesInfo *types.Info, node ast.Node) *analysis.Diagnostic {
+func processNode(
+	fset *token.FileSet,
+	typesInfo *types.Info,
+	node ast.Node,
+	pkgOut packagesOutput,
+) *analysis.Diagnostic {
 	if node == nil {
 		return nil
 	}
@@ -66,19 +109,36 @@ func processNode(fset *token.FileSet, typesInfo *types.Info, node ast.Node) *ana
 		return nil
 	}
 
-	return processExpr(fset, typesInfo, expr)
+	fPath := fset.Position(expr.Pos()).Filename
+	filePkgOut := pkgOut[fPath]
+	if filePkgOut == nil {
+		filePkgOut = &packagesFileResult{}
+		pkgOut[fPath] = filePkgOut
+	}
+
+	return processExpr(fset, typesInfo, expr, filePkgOut)
 }
 
-func processExpr(fset *token.FileSet, typesInfo *types.Info, expr ast.Expr) *analysis.Diagnostic {
+func processExpr(
+	fset *token.FileSet,
+	typesInfo *types.Info,
+	expr ast.Expr,
+	filePkgOut *packagesFileResult,
+) *analysis.Diagnostic {
 	switch e := expr.(type) {
 	case *ast.CallExpr:
-		return processCallExpr(fset, typesInfo, e)
+		return processCallExpr(fset, typesInfo, e, filePkgOut)
 	default:
 		return nil
 	}
 }
 
-func processCallExpr(fset *token.FileSet, typesInfo *types.Info, callExpr *ast.CallExpr) *analysis.Diagnostic {
+func processCallExpr(
+	fset *token.FileSet,
+	typesInfo *types.Info,
+	callExpr *ast.CallExpr,
+	filePkgOut *packagesFileResult,
+) *analysis.Diagnostic {
 	selExpr, _ := callExpr.Fun.(*ast.SelectorExpr)
 	if selExpr == nil {
 		return nil
@@ -92,6 +152,8 @@ func processCallExpr(fset *token.FileSet, typesInfo *types.Info, callExpr *ast.C
 		return nil
 	}
 
+	filePkgOut.fmtCount++
+
 	if selExpr.Sel.Name != "Sprintf" {
 		return nil
 	}
@@ -101,11 +163,16 @@ func processCallExpr(fset *token.FileSet, typesInfo *types.Info, callExpr *ast.C
 		return nil
 	}
 
-	return optimizeSprintf(fset, typesInfo, callExpr)
+	return optimizeSprintf(fset, typesInfo, callExpr, filePkgOut)
 }
 
-func optimizeSprintf(fset *token.FileSet, typesInfo *types.Info, callExpr *ast.CallExpr) *analysis.Diagnostic {
-	newExpr, ok := ProcessSprintfCall(typesInfo, callExpr)
+func optimizeSprintf(
+	fset *token.FileSet,
+	typesInfo *types.Info,
+	callExpr *ast.CallExpr,
+	filePkgOut *packagesFileResult,
+) *analysis.Diagnostic {
+	newExpr, ok := ProcessSprintfCall(typesInfo, callExpr, filePkgOut)
 	if !ok {
 		return nil
 	}
@@ -121,6 +188,69 @@ func optimizeSprintf(fset *token.FileSet, typesInfo *types.Info, callExpr *ast.C
 						Pos:     callExpr.Pos(),
 						End:     callExpr.End(),
 						NewText: []byte(formatNode(fset, newExpr)),
+					},
+				},
+			},
+		},
+	)
+}
+
+func processImportBlock(
+	fset *token.FileSet,
+	genDecl *ast.GenDecl,
+	filePkgResult *packagesFileResult,
+) *analysis.Diagnostic {
+	if filePkgResult.fmtCount > 0 && !filePkgResult.addedStrConv {
+		return nil
+	}
+
+	var alreadyHasStrConv bool
+	fmtImportIndex := -1
+
+	for i, spec := range genDecl.Specs {
+		importSpec, _ := spec.(*ast.ImportSpec)
+		if importSpec == nil {
+			continue // just in case...
+		}
+
+		pathLit := importSpec.Path
+		if pathLit.Kind != token.STRING {
+			return nil
+		}
+
+		importPath, err := strconv.Unquote(pathLit.Value)
+		if err != nil {
+			return nil
+		}
+
+		switch importPath {
+		case "fmt":
+			fmtImportIndex = i
+		case "strconv":
+			alreadyHasStrConv = true
+		}
+	}
+
+	if filePkgResult.fmtCount == 0 && fmtImportIndex > -1 {
+		genDecl.Specs = slices.Delete(genDecl.Specs, fmtImportIndex, fmtImportIndex+1)
+	}
+	if filePkgResult.addedStrConv && !alreadyHasStrConv {
+		genDecl.Specs = append(genDecl.Specs, &ast.ImportSpec{
+			Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote("strconv")},
+		})
+	}
+
+	return newAnalysisDiagnostic(
+		genDecl,
+		"Fix imports",
+		[]analysis.SuggestedFix{
+			{
+				Message: "Fix imports",
+				TextEdits: []analysis.TextEdit{
+					{
+						Pos:     genDecl.Pos(),
+						End:     genDecl.End(),
+						NewText: []byte(formatNode(fset, genDecl)),
 					},
 				},
 			},

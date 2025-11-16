@@ -1,6 +1,6 @@
 package p
 
-import (
+import ( // want "Fix imports"
 	"errors"
 	"fmt"
 )
