@@ -231,6 +231,8 @@ func processImportBlock(
 		}
 	}
 
+	initialGenDeclEnd := genDecl.End()
+
 	if filePkgResult.fmtCount == 0 && fmtImportIndex > -1 {
 		genDecl.Specs = slices.Delete(genDecl.Specs, fmtImportIndex, fmtImportIndex+1)
 	}
@@ -249,7 +251,7 @@ func processImportBlock(
 				TextEdits: []analysis.TextEdit{
 					{
 						Pos:     genDecl.Pos(),
-						End:     genDecl.End(),
+						End:     initialGenDeclEnd,
 						NewText: []byte(formatNode(fset, genDecl)),
 					},
 				},
